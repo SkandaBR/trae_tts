@@ -1,0 +1,5 @@
+numpy>=1.19.0
+scikit-learn>=0.24.0
+sentence-transformers>=2.2.0
+streamlit>=1.22.0
+gTTS>=2.3.0
