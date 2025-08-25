@@ -166,7 +166,7 @@ def main():
     Example usage of the BhagavadGitaRAG class.
     """
     # Path to your Kannada Bhagavad Gita JSON file
-    json_path = "path/to/bhagavadgita_kannada.json"
+    json_path = "path/to/bhagavadgita_Chapter_18.json"
     
     # Initialize the RAG system
     try:

@@ -1,13 +1,22 @@
-# Bhagavad Gita RAG System for Kannada
+# Bhagavad Gita RAG System with Bilingual Interface
 
-This project implements a Retrieval Augmented Generation (RAG) system for the Bhagavad Gita in Kannada language. The system allows users to query the Bhagavad Gita in Kannada and retrieve the most relevant verses based on semantic similarity.
+This project implements a Retrieval Augmented Generation (RAG) system for the Bhagavad Gita with support for both Kannada and English languages. The system includes both a Python library for programmatic access and a Streamlit web application with an intuitive bilingual interface.
 
 ## Features
 
+### Core RAG System
 - Load and process Kannada JSON data of Bhagavad Gita
 - Create embeddings for verses using a multilingual sentence transformer model
 - Retrieve the most relevant verses for a given query using cosine similarity
 - Support for various JSON structures of Bhagavad Gita data
+
+### Streamlit Web Application
+- **Bilingual Interface**: Complete language switching between English and Kannada
+- **Dynamic Content**: All UI elements update based on language selection
+- **Audio Support**: Text-to-speech functionality in both languages using gTTS
+- **Interactive Search**: Real-time verse retrieval with similarity scoring
+- **Example Queries**: Pre-built questions about key concepts like Dharma, Karma, and Moksha
+- **Responsive Design**: Modern UI with expandable result sections
 
 ## Requirements
 
@@ -15,16 +24,42 @@ This project implements a Retrieval Augmented Generation (RAG) system for the Bh
 numpy
 scikit-learn
 sentence-transformers
+streamlit
+gtts
 ```
 
 ## Installation
 
 1. Clone this repository
-2. Install the required packages:
+2. Navigate to the rag directory:
 
 ```bash
-pip install numpy scikit-learn sentence-transformers
+cd rag
 ```
+
+3. Install the required packages:
+
+```bash
+pip install -r requirements.txt
+```
+
+## Running the Streamlit Application
+
+To launch the web interface:
+
+```bash
+streamlit run app.py
+```
+
+The application will be available at `http://localhost:8501`
+
+### Application Features
+
+- **Language Selection**: Use the radio buttons to switch between English and Kannada
+- **Search Interface**: Enter your query in either language
+- **Audio Playback**: Listen to verses and translations with built-in text-to-speech
+- **Example Queries**: Click on pre-built questions to explore key concepts
+- **Adjustable Results**: Use the slider to control the number of search results
 
 ## Usage
 
@@ -88,6 +123,28 @@ You can adjust the number of results returned by the `retrieve` method:
 ```python
 results = rag.retrieve(query, top_k=5)  # Return top 5 results
 ```
+
+## File Structure
+
+```
+rag/
+├── app.py                              # Streamlit web application
+├── bhagavadgita_rag.py                 # Core RAG system implementation
+├── bhagavadgita_kannada_sample.json    # Sample Bhagavad Gita data with translations
+├── requirements.txt                     # Python dependencies
+└── README.md                           # This file
+```
+
+## Language Support
+
+The application supports:
+- **Kannada**: Native language interface with complete translations
+- **English**: Full English interface with translated content
+- **Audio**: Text-to-speech in both languages using Google Text-to-Speech (gTTS)
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit issues or pull requests to improve the system.
 
 ## License
 

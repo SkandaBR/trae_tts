@@ -30,8 +30,8 @@ st.session_state.language = language
 # Language-specific content dictionary
 LANG_CONTENT = {
     'English': {
-        'title': '🕉️ Bhagavad Gita Search',
-        'subtitle': 'Semantic Search in Bhagavad Gita',
+        'title': '🕉️ Bhagavad Gita Knowledge Repository',
+        'subtitle': 'Semantic Search and Information Retrieval from Bhagavad Gita',
         'data_loaded': '✅ Bhagavad Gita data loaded successfully',
         'example_queries_title': '📝 Example Queries',
         'example_queries': [
@@ -57,8 +57,8 @@ LANG_CONTENT = {
         'generating_translation_audio': 'Generating translation audio...'
     },
     'Kannada': {
-        'title': '🕉️ ಭಗವದ್ಗೀತೆ ಸರ್ಚ್',
-        'subtitle': 'ಭಗವದ್ಗೀತೆಯಲ್ಲಿ ಸಂದರ್ಭೋಚಿತ ಹುಡುಕಾಟ',
+        'title': '🕉️ ಭಗವದ್ಗೀತೆ ಜ್ಞಾನ ಭಂಡಾರ',
+        'subtitle': 'ಭಗವದ್ಗೀತೆಯಲ್ಲಿ ಸಂದರ್ಭೋಚಿತ ಮಾಹಿತಿ ಪುನರ್ಪ್ರಾಪ್ತಿ',
         'data_loaded': '✅ ಭಗವದ್ಗೀತೆಯ ಮಾಹಿತಿ ಈಗ ಲಭ್ಯ',
         'example_queries_title': '📝 ಉದಾಹರಣೆ ಪ್ರಶ್ನೆಗಳು',
         'example_queries': [
