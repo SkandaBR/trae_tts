@@ -10,9 +10,10 @@ class BhagavadGitaRAG:
     Retrieval Augmented Generation system for Bhagavad Gita in Kannada.
     This class loads Kannada JSON data of Bhagavad Gita, indexes it using embeddings,
     and provides retrieval capabilities.
+    sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 is used for embeddings.
     """
     
-    def __init__(self, json_path: str, model_name: str = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'):
+    def __init__(self, json_path: str, model_name: str = 'intfloat/multilingual-e5-large'):
         """
         Initialize the RAG system.
         

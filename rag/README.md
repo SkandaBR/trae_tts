@@ -37,6 +37,10 @@ gtts
 cd rag
 ```
 
+3. Create a virtual environment:
+
+py -3.11 -m venv .venv
+
 3. Install the required packages:
 
 ```bash
