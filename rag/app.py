@@ -1,9 +1,155 @@
+# Module-level logging and helpers
 import streamlit as st
 import os
 from bhagavadgita_rag import BhagavadGitaRAG
 from gtts import gTTS
 import tempfile
 import base64
+import logging
+from datetime import datetime
+import uuid
+import time
+import json
+
+LOG_DIR = os.path.join(os.path.dirname(__file__), "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+    handlers=[
+        logging.FileHandler(os.path.join(LOG_DIR, "app.log"), encoding="utf-8"),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+SLOW_THRESHOLD_MS = 5000
+
+def now_ms():
+    return int(time.time() * 1000)
+
+def get_system_metrics():
+    try:
+        import psutil
+        cpu = psutil.cpu_percent(interval=None)
+        vm = psutil.virtual_memory()
+        net = psutil.net_io_counters()
+        return {
+            "cpu_pct": cpu,
+            "mem_pct": vm.percent,
+            "mem_used_mb": round(vm.used / (1024 * 1024), 2),
+            "net_sent_mb": round(net.bytes_sent / (1024 * 1024), 2),
+            "net_recv_mb": round(net.bytes_recv / (1024 * 1024), 2),
+        }
+    except Exception:
+        return {
+            "cpu_pct": None,
+            "mem_pct": None,
+            "mem_used_mb": None,
+            "net_sent_mb": None,
+            "net_recv_mb": None,
+        }
+
+def log_event(event, level=logging.INFO, **fields):
+    payload = {"event": event, "ts": datetime.utcnow().isoformat(), **fields}
+    try:
+        logger.log(level, json.dumps(payload, ensure_ascii=False))
+    except Exception:
+        logger.log(level, f"{event} | {fields}")
+
+@st.cache_resource(show_spinner=False)
+def init_chroma():
+    try:
+        start = now_ms()
+        from chromadb import PersistentClient
+        from chromadb.config import Settings
+        persist_dir = os.path.join(os.path.dirname(__file__), "chroma_db")
+        client = PersistentClient(path=persist_dir, settings=Settings(anonymized_telemetry=False))
+        collection = client.get_or_create_collection("chat_history")
+        dur = now_ms() - start
+        log_event("chroma_init_success", duration_ms=dur, persist_dir=persist_dir, chroma_ready=True)
+        if dur > SLOW_THRESHOLD_MS:
+            log_event("chroma_init_slow", level=logging.WARNING, duration_ms=dur)
+        return client, collection
+    except Exception as e:
+        log_event("chroma_init_error", level=logging.ERROR, error=str(e), chroma_ready=False)
+        try:
+            st.warning(f"Chroma initialization error: {e}")
+        except Exception:
+            pass
+        return None, None
+
+@st.cache_resource(show_spinner=False)
+def get_embed_model():
+    try:
+        start = now_ms()
+        from sentence_transformers import SentenceTransformer
+        model = SentenceTransformer("intfloat/multilingual-e5-large")
+        dur = now_ms() - start
+        log_event("embed_model_loaded", duration_ms=dur, device="cpu", model="intfloat/multilingual-e5-large")
+        if dur > SLOW_THRESHOLD_MS:
+            log_event("embed_model_load_slow", level=logging.WARNING, duration_ms=dur)
+        return model
+    except Exception as e:
+        log_event("embed_model_error", level=logging.ERROR, error=str(e))
+        try:
+            st.error(f"Embedding model load error: {e}")
+        except Exception:
+            pass
+        return None
+
+def ensure_services_ready():
+    try:
+        # Lazy load services; avoid heavy work at import-time
+        if "chroma_client" not in st.session_state or "chat_col" not in st.session_state or st.session_state.chat_col is None:
+            st.session_state.chroma_client, st.session_state.chat_col = init_chroma()
+        if "embed_model" not in st.session_state or st.session_state.embed_model is None:
+            st.session_state.embed_model = get_embed_model()
+    except Exception as e:
+        log_event("ensure_services_error", level=logging.ERROR, error=str(e))
+        try:
+            st.warning(f"Service initialization error: {e}")
+        except Exception:
+            pass
+
+def persist_chat(chat_col, model, query_text, results, language):
+    try:
+        if chat_col is None or model is None or not query_text:
+            log_event("persist_chat_skipped", reason="missing_col_or_model_or_query")
+            return
+        # Build combined document
+        doc = query_text
+        if results:
+            top = results[0].get("verse", {})
+            doc = f"Query ({language}): {query_text}\nTop verse [Ch {top.get('chapter','')}, V {top.get('verse','')}]: {top.get('text','')}"
+        ids = [str(uuid.uuid4())]
+
+        t0 = now_ms()
+        embeds = model.encode([doc], convert_to_numpy=True, normalize_embeddings=True).tolist()
+        t1 = now_ms()
+        chat_col.add(ids=ids, documents=[doc], metadatas=[{
+            "type": "chat",
+            "language": language,
+            "timestamp": datetime.utcnow().isoformat(),
+            "query": query_text
+        }], embeddings=embeds)
+        t2 = now_ms()
+
+        log_event(
+            "persist_chat_success",
+            request_id=ids[0],
+            embed_ms=t1 - t0,
+            chroma_add_ms=t2 - t1,
+            total_ms=t2 - t0
+        )
+        if (t2 - t0) > SLOW_THRESHOLD_MS:
+            log_event("persist_chat_slow", level=logging.WARNING, total_ms=t2 - t0)
+    except Exception as e:
+        log_event("persist_chat_error", level=logging.ERROR, error=str(e))
+        try:
+            st.warning(f"Failed to persist chat: {e}")
+        except Exception:
+            pass
 
 # Set page config
 st.set_page_config(
@@ -45,7 +191,7 @@ LANG_CONTENT = {
         'query_example': 'Example: What did Krishna say about karma?',
         'results_slider': 'How many results to show?',
         'search_button': '🔍 Search',
-        'searching': 'Searching...',
+        'searching': 'Searching...', 
         'results_title': '📖 Results',
         'chapter': 'Chapter',
         'verse': 'Verse',
@@ -72,21 +218,80 @@ LANG_CONTENT = {
         'query_example': 'ಉದಾ: ಕರ್ಮದ ಬಗ್ಗೆ ಕೃಷ್ಣನು ಏನು ಹೇಳಿದನು?',
         'results_slider': 'ಎಷ್ಟು ಫಲಿತಾಂಶಗಳನ್ನು ತೋರಿಸಬೇಕು?',
         'search_button': '🔍 ಹುಡುಕಿ',
-        'searching': 'ಹುಡುಕುತ್ತಿದೆ...',
+        'searching': 'ಹುಡುಕುತ್ತಿದೆ...', 
         'results_title': '📖 ಫಲಿತಾಂಶಗಳು',
         'chapter': 'ಅಧ್ಯಾಯ',
-        'verse': 'ಶ್ಲೋಕ',
+        'verse': 'ಶ್ತು',
         'similarity': 'ಹೊಂದಾಣಿಕೆ',
-        'original_verse': 'ಮೂಲ ಶ್ಲೋಕ',
+        'original_verse': 'ಮೂಲ ಶ್ತು',
         'translation': 'ಕನ್ನಡ ಅರ್ಥ',
         'generating_audio': 'ಧ್ವನಿ ತಯಾರಿಸುತ್ತಿದೆ...',
-        'generating_original_audio': 'ಮೂಲ ಶ್ಲೋಕದ ಧ್ವನಿ ತಯಾರಿಸುತ್ತಿದೆ...',
+        'generating_original_audio': 'ಮೂಲ ಶ್ತುದ ಧ್ವನಿ ತಯಾರಿಸುತ್ತಿದೆ...', 
         'generating_translation_audio': 'ಅನುವಾದದ ಧ್ವನಿ ತಯಾರಿಸುತ್ತಿದೆ...'
     }
 }
 
 # Get current language content
 content = LANG_CONTENT[st.session_state.language]
+
+# Initialize Chroma and embedding model in session
+if "chroma_client" not in st.session_state or "chat_col" not in st.session_state:
+    try:
+        st.session_state.chroma_client, st.session_state.chat_col = init_chroma()
+    except Exception as e:
+        log_event("chroma_session_init_error", level=logging.ERROR, error=str(e))
+        st.session_state.chroma_client = None
+        st.session_state.chat_col = None
+        st.warning(f"Chroma unavailable: {e}")
+
+if "embed_model" not in st.session_state or st.session_state.embed_model is None:
+    st.session_state.embed_model = get_embed_model()
+
+# Remove heavy init at import-time; call ensure_services_ready() right before usage
+# (delete any previous top-level calls to init_chroma/get_embed_model here)
+
+# Sidebar: Chat history semantic search
+with st.sidebar:
+    st.markdown("### 🔎 Search Chat History")
+    hist_query = st.text_input("Search past chats")
+    hist_k = st.slider("Results", 1, 10, 3)
+    if hist_query:
+        ensure_services_ready()
+        hs_start = now_ms()
+        net_before = get_system_metrics()
+        try:
+            if st.session_state.embed_model is None or st.session_state.chat_col is None:
+                log_event("history_search_skipped", reason="missing_model_or_collection")
+                st.warning("Embedding model or Chroma not initialized.")
+            else:
+                q_emb = st.session_state.embed_model.encode(
+                    [hist_query], convert_to_numpy=True, normalize_embeddings=True
+                ).tolist()
+                enc_ms = now_ms() - hs_start
+                res = st.session_state.chat_col.query(query_embeddings=q_emb, n_results=hist_k)
+                hs_end = now_ms()
+                net_after = get_system_metrics()
+                log_event(
+                    "history_search_done",
+                    duration_ms=hs_end - hs_start,
+                    encode_ms=enc_ms,
+                    chroma_query_ms=hs_end - hs_start - enc_ms,
+                    params={"query": hist_query, "k": hist_k},
+                    metrics={"before": net_before, "after": net_after},
+                    results_count=len(res.get("ids", [[]])[0]) if res and res.get("ids") else 0
+                )
+                if (hs_end - hs_start) > SLOW_THRESHOLD_MS:
+                    log_event("history_search_slow", level=logging.WARNING, duration_ms=hs_end - hs_start)
+                if res and res.get("documents"):
+                    for i in range(len(res["ids"][0])):
+                        st.write(res["documents"][0][i])
+                        ts = res["metadatas"][0][i].get("timestamp")
+                        st.caption(ts if ts else "")
+                else:
+                    st.info("No matches found in chat history.")
+        except Exception as e:
+            log_event("history_search_error", level=logging.ERROR, error=str(e))
+            st.warning(f"Chat history search failed: {e}")
 
 # Function to create audio player HTML
 def get_audio_player_html(audio_path, label=""):
@@ -177,6 +382,7 @@ st.markdown(f"""
 ---
 """)
 
+
 @st.cache_resource
 def load_rag_system():
     """Load the RAG system with caching"""
@@ -200,6 +406,10 @@ try:
             if st.button(example_query):
                 st.session_state.query = example_query
 
+    # Ensure query is initialized in session state
+    if 'query' not in st.session_state:
+        st.session_state.query = ""
+
     # Search interface
     with st.form(key="search_form"):
         # Search query input
@@ -220,72 +430,103 @@ try:
         # Search button
         search_button = st.form_submit_button(content['search_button'])
 
-    # Process search when button is clicked or when example query is selected
-    if (search_button and query) or (st.session_state.query and not search_button):
-        # Use the query from session state if it exists, otherwise use the form input
-        search_query = st.session_state.query if st.session_state.query else query
-        
-        with st.spinner(content['searching']):
+    # Perform search
+    with st.spinner(content['searching']):
+        # Only run search on submit with a non-empty query
+        if search_button and query.strip():
+            search_query = query.strip()
+
+            req_id = str(uuid.uuid4())
+            start_ms = now_ms()
+            metrics_before = get_system_metrics()
+            log_event(
+                "request_start",
+                request_id=req_id,
+                params={"query": search_query, "language": st.session_state.language, "top_k": num_results},
+                metrics=metrics_before,
+                chroma_ready=st.session_state.chat_col is not None
+            )
+
+            # Use cached RAG instance and ensure services are ready
+            rag_init_start = now_ms()
+            rag = load_rag_system()
+            rag_init_ms = now_ms() - rag_init_start
+            ensure_services_ready()
+
+            retrieve_start = now_ms()
             results = rag.retrieve(search_query, top_k=num_results)
+            retrieve_ms = now_ms() - retrieve_start
 
-        # Display results
-        st.markdown(f"### {content['results_title']}")
-        for i, result in enumerate(results, 1):
-            verse = result['verse']
-            similarity = result['similarity']
+            try:
+                persist_chat(
+                    st.session_state.chat_col,
+                    st.session_state.embed_model,
+                    search_query,
+                    results,
+                    st.session_state.language
+                )
+            except Exception as e:
+                log_event("persist_chat_wrapper_error", level=logging.ERROR, error=str(e))
+                st.warning(f"Could not persist chat: {e}")
 
-            with st.expander(f"{content['chapter']} {verse.get('chapter', 'Unknown')}, {content['verse']} {verse.get('verse', 'Unknown')} ({content['similarity']}: {similarity:.2%})"):
-                # Original text
-                st.markdown(f"**{content['original_verse']}:**")
-                st.markdown(f"*{verse.get('text', '')}*")
+            end_ms = now_ms()
+            metrics_after = get_system_metrics()
+            total_ms = end_ms - start_ms
 
-                # Add text-to-speech for original verse
-                with st.spinner(content['generating_original_audio']):
-                    original_audio_path = generate_speech(verse.get('text', ''))
-                    if original_audio_path:
-                        st.markdown(get_audio_player_html(original_audio_path, content['original_verse']), unsafe_allow_html=True)
-                        try:
-                            os.unlink(original_audio_path)
-                        except:
-                            pass
+            log_event(
+                "request_end",
+                request_id=req_id,
+                total_ms=total_ms,
+                rag_init_ms=rag_init_ms,
+                retrieve_ms=retrieve_ms,
+                metrics={"before": metrics_before, "after": metrics_after}
+            )
+            if total_ms > SLOW_THRESHOLD_MS:
+                log_event("request_slow", level=logging.WARNING, request_id=req_id, total_ms=total_ms)
 
-                # Translation
-                if 'translation' in verse:
-                    st.markdown(f"**{content['translation']}:**")
-                    
-                    if st.session_state.language == 'English':
-                        # For English mode, show English translation if available, otherwise show Kannada
-                        english_translation = verse.get('english_translation', verse['translation'])
-                        st.markdown(english_translation)
-                        
-                        # Add text-to-speech for English translation
-                        with st.spinner(content['generating_translation_audio']):
-                            translation_audio_path = generate_speech(english_translation, lang='en')
-                            if translation_audio_path:
-                                st.markdown(get_audio_player_html(translation_audio_path, content['translation']), unsafe_allow_html=True)
-                                try:
-                                    os.unlink(translation_audio_path)
-                                except:
-                                    pass
-                    else:
-                        # For Kannada mode, show Kannada translation
-                        st.markdown(verse['translation'])
-                        
-                        # Add text-to-speech for Kannada translation
-                        with st.spinner(content['generating_translation_audio']):
-                            translation_audio_path = generate_speech(verse['translation'])
-                            if translation_audio_path:
-                                st.markdown(get_audio_player_html(translation_audio_path, content['translation']), unsafe_allow_html=True)
-                                try:
-                                    os.unlink(translation_audio_path)
-                                except:
-                                    pass
+            # Display results
+            st.markdown(f"### {content['results_title']}")
+            for i, result in enumerate(results, 1):
+                verse = result['verse']
+                similarity = result['similarity']
+                with st.expander(f"{content['chapter']} {verse.get('chapter', 'Unknown')}, {content['verse']} {verse.get('verse', 'Unknown')} ({content['similarity']}: {similarity:.2%})"):
+                    st.markdown(f"**{content['original_verse']}:**")
+                    st.markdown(f"*{verse.get('text', '')}*")
+                    with st.spinner(content['generating_original_audio']):
+                        original_audio_path = generate_speech(verse.get('text', ''))
+                        if original_audio_path:
+                            st.markdown(get_audio_player_html(original_audio_path, content['original_verse']), unsafe_allow_html=True)
+                            try:
+                                os.unlink(original_audio_path)
+                            except:
+                                pass
+                    if 'translation' in verse:
+                        st.markdown(f"**{content['translation']}:**")
+                        if st.session_state.language == 'English':
+                            english_translation = verse.get('english_translation', verse['translation'])
+                            st.markdown(english_translation)
+                            with st.spinner(content['generating_translation_audio']):
+                                translation_audio_path = generate_speech(english_translation, lang='en')
+                                if translation_audio_path:
+                                    st.markdown(get_audio_player_html(translation_audio_path, content['translation']), unsafe_allow_html=True)
+                                    try:
+                                        os.unlink(translation_audio_path)
+                                    except:
+                                        pass
+                        else:
+                            st.markdown(verse['translation'])
+                            with st.spinner(content['generating_translation_audio']):
+                                translation_audio_path = generate_speech(verse['translation'])
+                                if translation_audio_path:
+                                    st.markdown(get_audio_player_html(translation_audio_path, content['translation']), unsafe_allow_html=True)
+                                    try:
+                                        os.unlink(translation_audio_path)
+                                    except:
+                                        pass
+                    st.progress(similarity)
 
-                # Similarity score
-                st.progress(similarity)
-        
-        # Clear the session state query after search
-        st.session_state.query = ""
+            # Clear the session state query after successful search
+            st.session_state.query = ""
 
 except Exception as e:
     st.error(f"Error: {str(e)}")

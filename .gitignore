@@ -2,4 +2,13 @@
 venv/
 .venv/
 env/
+rag/chroma_db/
+rag/logs/
+__pycache__/
+*.pyc
+*.log
+*.sqlite3
+*.mp3
+Thumbs.db
+.DS_Store
 ENV/
