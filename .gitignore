@@ -12,3 +12,25 @@ __pycache__/
 Thumbs.db
 .DS_Store
 ENV/
+# .venv/
+# Python cache directory
+rag/__pycache__/
+
+# Virtual environment directory
+rag/.venv/
+
+# Secondary virtual environment directory
+rag/.venv311/
+
+# Database storage directory
+rag/chroma_db/
+
+# Application logs directory
+rag/logs/
+*.pyc
+*.log
+*.sqlite3
+*.mp3
+Thumbs.db
+.DS_Store
+ENV/
