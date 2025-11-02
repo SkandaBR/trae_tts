@@ -181,3 +181,15 @@ Contributions are welcome! Please feel free to submit issues or pull requests to
 ## License
 
 This project is open-source and available for educational and research purposes.
+
+# Chroma DB Integration Summary
+# - Purpose: Chroma DB provides a persistent vector store for semantic retrieval of Bhagavad Gita content, enabling efficient top‑k search across Kannada/English text.
+# - build_chroma_store.py: Ingests Chapter 18 JSON, constructs multilingual documents and metadata, computes normalized embeddings (SentenceTransformer multilingual‑e5‑large), and persists to collection `bhagavadgita_ch18` in `chroma_db`.
+# - example_chroma_query.py: Encodes a Kannada query with the same embedding model, queries `bhagavadgita_ch18`, and prints top‑k results with verse metadata and document excerpts.
+# - health_check_chroma.py: Executes a diagnostic write/read by adding a 1024‑dim test vector to `health_check`, querying it, and printing collection count and IDs with telemetry disabled.
+# - Technical achievements: Stable IDs for deduplication, multilingual concatenation of text and translations for richer semantics, normalized embeddings, and reproducible local persistence (DuckDB/Parquet via Chroma).
+# - Performance improvements: Precomputed embeddings and local persistence reduce query latency; embedding normalization improves cosine‑similarity stability; local client avoids network overhead.
+# - Challenges overcome: Robust handling of heterogeneous JSON schemas and bilingual content alignment; safe collection reset logic to prevent stale data without native truncate.
+# - Embedding method: SentenceTransformer `intfloat/multilingual-e5-large`, generating 1024‑dim normalized vectors for documents and queries.
+# - Query capabilities: `collection.query` with configurable `n_results` (e.g., 3–5), returning documents and metadatas suitable for UI display or downstream processing.
+# - Integration points: Shared `chroma_db` path reused across scripts; artifacts are ready for consumption by applications (e.g., `app.py`) or CLI utilities.
