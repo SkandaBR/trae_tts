@@ -39,7 +39,7 @@ cd rag
 
 3. Create a virtual environment:
 
-py -3.11 -m venv .venv
+py -m venv .venv
 
 3. Install the required packages:
 
@@ -47,7 +47,35 @@ py -3.11 -m venv .venv
 pip install -r requirements.txt
 ```
 
-## Running the Streamlit Application
+# Quick Start Guide
+
+## Running the Application
+
+1. **Navigate to the project directory:**
+   ```bash
+   cd trae_tts\rag
+   ```
+
+2. **Create and activate virtual environment (if not already done):**
+   ```bash
+   py -m venv .venv311
+   .venv311\Scripts\activate
+   ```
+
+3. **Install required packages:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Run the Streamlit application:**
+   ```bash
+   streamlit run app.py
+   ```
+
+5. **Access the application:**
+   - Open your web browser
+   - Navigate to: `http://localhost:8501`
+   - The bilingual Bhagavad Gita RAG interface will load successfully
 
 To launch the web interface:
 
