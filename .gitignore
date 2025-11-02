@@ -2,11 +2,25 @@
 venv/
 .venv/
 env/
+# Secrets and local env files
+rag/secrets.properties
+.env
+rag/.env
+
+# Runtime artifacts
 rag/chroma_db/
 rag/logs/
-__pycache__/
-*.pyc
 *.log
+# Ignore IDE workspace files
+review4.core-workspace
+**/review4.code-workspace
+
+# Ignore Python cache directories
+__pycache__/
+**/__pycache__/**
+_pycache_/
+**/_pycache_/**
+*.pyc
 *.sqlite3
 *.mp3
 Thumbs.db

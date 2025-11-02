@@ -97,16 +97,16 @@ class BhagavadGitaRAG:
         # Extract text from verses for embedding
         texts = []
         for verse in self.verses:
-            if isinstance(verse, dict) and 'text' in verse:
-                texts.append(verse['text'])
-            elif isinstance(verse, str):
-                texts.append(verse)
+            if isinstance(verse, dict):
+                base = verse.get('text', '')
+                en = verse.get('english_translation', '')
+                kn_trans = verse.get('translation', '')  # if this is Kannada translation
+                combined = " ".join([p for p in [base, kn_trans, en] if p])
+                texts.append(combined if combined else str(verse))
             else:
-                # Try to find text in the verse structure
-                text = self._extract_text(verse)
-                texts.append(text if text else str(verse))
+                texts.append(str(verse))
         
-        # Create embeddings
+        # # # Create embeddings
         self.embeddings = self.model.encode(texts)
         print(f"Created embeddings for {len(texts)} verses")
     
